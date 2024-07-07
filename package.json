@@ -1,0 +1,23 @@
+{
+  "name": "twilio-s3-voicemail",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.609.0",
+    "aws-sdk": "^2.1655.0",
+    "axios": "^1.7.2",
+    "express": "^4.19.2",
+    "fluent-ffmpeg": "^2.1.3"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nock": "^13.5.4"
+  }
+}

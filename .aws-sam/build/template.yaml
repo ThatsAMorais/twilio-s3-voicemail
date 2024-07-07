@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  TwilioS3UploaderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs18.x
+      CodeUri: TwilioS3UploaderFunction
+      Environment:
+        Variables:
+          BUCKET_NAME:
+            Ref: S3BucketName
+      Role:
+        Fn::GetAtt:
+        - TwilioS3UploaderRole
+        - Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: TwilioVoicemailAPI
+            Path: /voicemail
+            Method: post
+      Tags:
+        Project: TwilioVoicemailUploader
+        Environment: Dev
+    Metadata:
+      SamResourceId: TwilioS3UploaderFunction
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Ref: S3BucketName
+      Tags:
+      - Key: Project
+        Value: TwilioVoicemailUploader
+      - Key: Environment
+        Value: Dev
+  TwilioS3UploaderPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: TwilioS3UploaderPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:ListBucket
+          - s3:PutObject
+          - s3:PutObjectAcl
+          - s3:GetObject
+          Resource:
+          - Fn::Sub: arn:aws:s3:::${S3BucketName}
+          - Fn::Sub: arn:aws:s3:::${S3BucketName}/*
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Resource:
+          - arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/TwilioS3UploaderFunction:*
+      Roles:
+      - Ref: TwilioS3UploaderRole
+  TwilioS3UploaderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: TwilioS3UploaderRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - Ref: TwilioS3UploaderPolicy
+  TwilioVoicemailAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: TwilioVoicemailAPI
+      Description: API for uploading Twilio voicemails to S3
+      EndpointConfiguration:
+        Types:
+        - REGIONAL
+      Tags:
+      - Key: Project
+        Value: TwilioVoicemailUploader
+      - Key: Environment
+        Value: Dev
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId:
+        Ref: TwilioVoicemailAPI
+      StageName: default
+    DependsOn: TwilioS3UploaderFunction
+  ApiStageDev:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: dev
+      DeploymentId:
+        Ref: ApiDeployment
+      RestApiId:
+        Ref: TwilioVoicemailAPI
+      MethodSettings:
+      - DataTraceEnabled: true
+        HttpMethod: '*'
+        LoggingLevel: INFO
+        ResourcePath: /*
+        MetricsEnabled: true
+  ApiStageProd:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      DeploymentId:
+        Ref: ApiDeployment
+      RestApiId:
+        Ref: TwilioVoicemailAPI
+      MethodSettings:
+      - DataTraceEnabled: true
+        HttpMethod: '*'
+        LoggingLevel: INFO
+        ResourcePath: /*
+        MetricsEnabled: true
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: The name of the S3 bucket for storing voicemails
+    Default: twilio-voicemail-storage
+Outputs:
+  FunctionArn:
+    Description: ARN of the Lambda function
+    Value:
+      Fn::GetAtt:
+      - TwilioS3UploaderFunction
+      - Arn
+  S3BucketName:
+    Description: Name of the S3 bucket
+    Value:
+      Ref: S3BucketName
+  ApiEndpoint:
+    Description: API Gateway endpoint URL for the $default stage
+    Value:
+      Fn::Sub: https://${TwilioVoicemailAPI}.execute-api.${AWS::Region}.amazonaws.com/{{default}}/voicemail
