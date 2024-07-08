@@ -10,9 +10,6 @@ set -o allexport
 source "$1"
 set -o allexport
 
-# Cleanup previous resources
-aws cloudformation delete-stack --stack-name TwilioS3VoicemailUploaderStack
-
 # Create the temporary S3 bucket for packaging
 aws s3 mb s3://$PACKAGE_BUCKET_NAME --region $AWS_REGION
 

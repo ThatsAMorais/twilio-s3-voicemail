@@ -15,11 +15,21 @@ exports.handler = async (event) => {
   if (!event.body) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ message: 'Invalid input' })
+      body: JSON.stringify({ message: 'Invalid input: no body' })
     };
   }
 
-  const body = JSON.parse(event.body);
+  let body;
+  try {
+    body = JSON.parse(event.body);
+  } catch (err) {
+    console.error('Error parsing JSON body:', err);
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ message: 'Invalid JSON format' })
+    };
+  }
+
   const voicemailUrl = body.RecordingUrl;
 
   if (!voicemailUrl) {
@@ -30,8 +40,13 @@ exports.handler = async (event) => {
   }
 
   try {
+    console.log('Fetching voicemail from URL:', voicemailUrl);
     const voicemailData = await fetchVoicemail(voicemailUrl);
+    console.log('Voicemail fetched successfully.');
+
+    console.log('Uploading voicemail to S3...');
     const s3Response = await uploadToS3(voicemailData);
+    console.log('Voicemail uploaded to S3 successfully.');
 
     return {
       statusCode: 200,
