@@ -111,92 +111,6 @@ The Lambda function is designed to receive a webhook request from Twilio contain
 5. **Return Response**:
    - The function returns a success response if the upload is successful, or an error response if it fails.
 
-### index.js
-
-```javascript
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const crypto = require('crypto');
-const https = require('https');
-
-const BUCKET_NAME = process.env.BUCKET_NAME;
-const s3Client = new S3Client({ region: 'us-east-1' });
-
-function generateFileName() {
-  return `voicemail-${crypto.randomUUID()}.mp3`;
-}
-
-exports.handler = async (event) => {
-  console.log("Received event:", JSON.stringify(event, null, 2));
-
-  if (!event.body) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'Invalid input' })
-    };
-  }
-
-  const body = JSON.parse(event.body);
-  const voicemailUrl = body.RecordingUrl;
-
-  if (!voicemailUrl) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ message: 'No voicemail URL provided' })
-    };
-  }
-
-  try {
-    const voicemailData = await fetchVoicemail(voicemailUrl);
-    const s3Response = await uploadToS3(voicemailData);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        message: 'Voicemail uploaded successfully',
-        s3Response
-      })
-    };
-  } catch (error) {
-    console.error('Error uploading voicemail:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: 'Failed to upload voicemail', error: error.message })
-    };
-  }
-};
-
-const fetchVoicemail = async (url) => {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = [];
-      res.on('data', (chunk) => {
-        data.push(chunk);
-      });
-      res.on('end', () => {
-        if (res.statusCode === 200) {
-          resolve(Buffer.concat(data));
-        } else {
-          reject(new Error(`Failed to fetch voicemail, status code: ${res.statusCode}`));
-        }
-      });
-    }).on('error', (err) => {
-      reject(err);
-    });
-  });
-};
-
-const uploadToS3 = async (voicemailData) => {
-  const params = {
-    Bucket: BUCKET_NAME,
-    Key: generateFileName(),
-    Body: voicemailData,
-    ServerSideEncryption: 'AES256'
-  };
-
-  const command = new PutObjectCommand(params);
-  return s3Client.send(command);
-};
-```
 
 ## Additional Information
 
@@ -210,30 +124,19 @@ Here is an example of the policy used for the admin user:
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreatePolicy",
-        "iam:DeletePolicy",
-        "iam:CreateGroup",
-        "iam:DeleteGroup",
-        "iam:AttachGroupPolicy",
-        "iam:DetachGroupPolicy",
-        "iam:AddUserToGroup",
-        "iam:RemoveUserFromGroup",
-        "s3:CreateBucket",
-        "s3:DeleteBucket"
-      ],
-      "Resource": [
-        "arn:aws:iam::${ACCOUNT_ID}:policy/SAMCLIUserPolicy",
-        "arn:aws:iam::${ACCOUNT_ID}:group/TwilioVoicemailUploaderDevs",
-        "arn:aws:iam::${ACCOUNT_ID}:user/*",
-        "arn:aws:s3:::${PACKAGE_BUCKET_NAME}",
-        "arn:aws:s3:::${PACKAGE_BUCKET_NAME}/*"
-      ]
-    }
-  ]
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:*",
+                "s3:*",
+                "cloudformation:*",
+                "apigateway:*",
+                "lambda:*"
+            ],
+            "Resource": "*"
+        }
+    ]
 }
 ```

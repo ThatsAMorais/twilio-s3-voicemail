@@ -12,10 +12,6 @@ set -o allexport
 
 # Cleanup previous resources
 aws cloudformation delete-stack --stack-name TwilioS3VoicemailUploaderStack
-aws s3 rb s3://$PACKAGE_BUCKET_NAME --force
-aws iam delete-group-policy --group-name TwilioVoicemailUploaderDevs --policy-name SAMCLIUserPolicy
-aws iam delete-policy --policy-arn arn:aws:iam::${AWS_ACCOUNT_ID}:policy/SAMCLIUserPolicy
-# do not delete the group or else all of the users we might have had previously will require readding
 
 # Create the temporary S3 bucket for packaging
 aws s3 mb s3://$PACKAGE_BUCKET_NAME --region $AWS_REGION
@@ -39,7 +35,12 @@ aws iam create-policy --policy-name SAMCLIUserPolicy --policy-document '{
         "s3:GetBucketPolicy",
         "s3:PutEncryptionConfiguration"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:s3:::twilio-voicemail-storage",
+        "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*",
+        "arn:aws:s3:::twilio-voicemail-storage/*",
+        "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*/*"
+      ]
     },
     {
       "Effect": "Allow",

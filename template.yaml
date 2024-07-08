@@ -32,6 +32,18 @@ Resources:
         - Key: Environment
           Value: Dev
 
+  TwilioS3UploaderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "TwilioS3UploaderRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+
   TwilioS3UploaderPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -54,23 +66,11 @@ Resources:
               - "logs:CreateLogStream"
               - "logs:PutLogEvents"
             Resource:
-              - "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/TwilioS3UploaderFunction:*"
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/TwilioS3UploaderFunction:*"
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/TwilioS3UploaderFunction:*:*"
       Roles:
         - !Ref TwilioS3UploaderRole
-
-  TwilioS3UploaderRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: "TwilioS3UploaderRole"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service: "lambda.amazonaws.com"
-            Action: "sts:AssumeRole"
-      ManagedPolicyArns:
-        - !Ref TwilioS3UploaderPolicy
+    DependsOn: TwilioS3UploaderRole
 
   TwilioVoicemailAPI:
     Type: AWS::ApiGateway::RestApi
@@ -86,12 +86,35 @@ Resources:
         - Key: Environment
           Value: Dev
 
+  VoicemailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt TwilioVoicemailAPI.RootResourceId
+      PathPart: voicemail
+      RestApiId: !Ref TwilioVoicemailAPI
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref VoicemailResource
+      RestApiId: !Ref TwilioVoicemailAPI
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TwilioS3UploaderFunction.Arn}/invocations
+          - TwilioS3UploaderFunction: !GetAtt TwilioS3UploaderFunction.Arn
+    DependsOn: TwilioS3UploaderFunction
+
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref TwilioVoicemailAPI
       StageName: default
-    DependsOn: TwilioS3UploaderFunction
+    DependsOn:
+      - ApiMethod
 
   ApiStageDev:
     Type: AWS::ApiGateway::Stage
@@ -105,6 +128,7 @@ Resources:
           LoggingLevel: INFO
           ResourcePath: "/*"
           MetricsEnabled: true
+    DependsOn: ApiDeployment
 
   ApiStageProd:
     Type: AWS::ApiGateway::Stage
@@ -118,6 +142,7 @@ Resources:
           LoggingLevel: INFO
           ResourcePath: "/*"
           MetricsEnabled: true
+    DependsOn: ApiDeployment
 
 Parameters:
   S3BucketName:
